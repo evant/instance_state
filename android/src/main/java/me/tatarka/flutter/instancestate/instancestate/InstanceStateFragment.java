@@ -2,7 +2,6 @@ package me.tatarka.flutter.instancestate.instancestate;
 
 import android.app.Fragment;
 import android.os.Bundle;
-import android.util.Log;
 
 import io.flutter.plugin.common.BasicMessageChannel;
 
@@ -14,9 +13,7 @@ public class InstanceStateFragment extends Fragment implements BasicMessageChann
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.d("flutter", "onCreate");
         if (savedInstanceState != null) {
-            Log.d("flutter", "restoring: " + savedInstanceState);
             restoreState = savedInstanceState;
         }
     }
@@ -26,7 +23,6 @@ public class InstanceStateFragment extends Fragment implements BasicMessageChann
         super.onSaveInstanceState(outState);
         if (saveState != null) {
             outState.putAll(saveState);
-            Log.d("flutter", "saving: " + saveState);
         }
     }
 
@@ -36,12 +32,11 @@ public class InstanceStateFragment extends Fragment implements BasicMessageChann
 
     @Override
     public void onMessage(StateMessage message, BasicMessageChannel.Reply<StateMessage> reply) {
-        Log.d("flutter", "onMessage");
         if (message.type == StateMessage.TYPE_GET) {
             if (restoreState != null) {
-                message.data = restoreState.getByteArray(message.key);
-            } else {
-                //TODO: wait for onCreate?
+                byte[] data = restoreState.getByteArray(message.key);
+                restoreState.remove(message.key);
+                message.data = data;
             }
             reply.reply(message);
         } else {
@@ -50,16 +45,5 @@ public class InstanceStateFragment extends Fragment implements BasicMessageChann
             }
             saveState.putByteArray(message.key, message.data);
         }
-    }
-
-    private static String toString(byte[] bytes) {
-        StringBuilder b = new StringBuilder();
-        for (int i = 0; i < bytes.length; i++) {
-            b.append(bytes[i]);
-            if (i != bytes.length - 1) {
-                b.append(", ");
-            }
-        }
-        return b.toString();
     }
 }

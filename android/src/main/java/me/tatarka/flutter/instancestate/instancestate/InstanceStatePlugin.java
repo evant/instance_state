@@ -4,7 +4,9 @@ import android.app.Activity;
 import android.os.Debug;
 
 import io.flutter.plugin.common.BasicMessageChannel;
+import io.flutter.plugin.common.MessageCodec;
 import io.flutter.plugin.common.PluginRegistry.Registrar;
+import io.flutter.plugin.common.StringCodec;
 
 /**
  * InstanceStatePlugin
@@ -17,7 +19,6 @@ public class InstanceStatePlugin {
      * Plugin registration.
      */
     public static void registerWith(Registrar registrar) {
-        Debug.waitForDebugger();
         Activity activity = registrar.activity();
         InstanceStateFragment fragment = (InstanceStateFragment) activity.getFragmentManager().findFragmentByTag(TAG);
         if (fragment == null) {

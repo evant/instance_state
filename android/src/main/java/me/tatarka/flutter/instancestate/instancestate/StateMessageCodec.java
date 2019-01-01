@@ -12,16 +12,11 @@ public class StateMessageCodec implements MessageCodec<StateMessage> {
 
     @Override
     public ByteBuffer encodeMessage(StateMessage message) {
-        if (message == null) {
+        if (message == null || message.data == null) {
             return null;
         }
-        ByteBuffer buffer = ByteBuffer.allocate(length(message));
-        buffer.put(message.type);
-        buffer.put((byte) message.key.length());
-        buffer.put(message.key.getBytes(charset));
-        if (message.data != null) {
-            buffer.put(message.data);
-        }
+        ByteBuffer buffer = ByteBuffer.allocateDirect(message.data.length);
+        buffer.put(message.data);
         return buffer;
     }
 
@@ -41,13 +36,5 @@ public class StateMessageCodec implements MessageCodec<StateMessage> {
             buffer.get(data);
         }
         return new StateMessage(type, key, data);
-    }
-
-    private int length(StateMessage message) {
-        int length = message.key.length() + 2;
-        if (message.data != null) {
-            length += message.data.length;
-        }
-        return length;
     }
 }

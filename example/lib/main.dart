@@ -3,17 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:instance_state/instance_state.dart';
 
-void main() => runApp(MyApp());
+void main() => runApp(InstanceStateWidget(child: MyApp()));
 
 class MyApp extends StatefulWidget {
   @override
   _MyAppState createState() => _MyAppState();
 }
 
-class _MyAppState extends InstanceState<MyApp> {
+class _MyAppState extends State<MyApp> with HasInstanceState {
   var _counter = 0;
-
-  _MyAppState() : super("counter");
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +41,9 @@ class _MyAppState extends InstanceState<MyApp> {
   }
 
   @override
+  String get instanceStateKey => "counter";
+
+  @override
   saveInstanceState() {
     return _counter;
   }
@@ -53,30 +54,69 @@ class _MyAppState extends InstanceState<MyApp> {
   }
 }
 
-abstract class InstanceState<T extends StatefulWidget> extends State<T> {
-  String key;
+class InstanceStateWidget extends InheritedWidget {
+  InstanceStateWidget(
+      {Key key,
+      @required Widget child,
+      this.instanceStateStore = const InstanceStateStore()})
+      : super(key: key, child: child);
 
-  InstanceState(this.key);
+  final InstanceStateStore instanceStateStore;
 
-  @override
-  void initState() {
-    super.initState();
-    _initPlatformState();
+  static InstanceStateWidget of(BuildContext context) {
+    return context.inheritFromWidgetOfExactType(InstanceStateWidget);
   }
 
+  Future<dynamic> restore(HasInstanceState mixin) {
+    return instanceStateStore.restore(_key(mixin));
+  }
+
+  void save(HasInstanceState mixin, dynamic value) {
+    instanceStateStore.save(_key(mixin), value);
+  }
+
+  String _key(HasInstanceState mixin) {
+    HasInstanceState parent =
+        mixin.context.ancestorStateOfType(TypeMatcher<HasInstanceState>());
+    if (parent != null) {
+      return _key(parent) + "." + mixin.instanceStateKey;
+    } else {
+      return mixin.instanceStateKey;
+    }
+  }
+
+  @override
+  bool updateShouldNotify(InstanceStateWidget oldWidget) {
+    return this.instanceStateStore != oldWidget.instanceStateStore;
+  }
+}
+
+mixin HasInstanceState<T extends StatefulWidget> on State<T> {
+  String get instanceStateKey;
+
   Future<void> _initPlatformState() async {
-    var state = await InstanceStateStore.restore(key);
+    var state = await InstanceStateWidget.of(context).restore(this);
     if (!mounted) return;
-    setState(() {
-      restoreInstanceState(state);
-    });
+    if (state != null) {
+      setState(() {
+        restoreInstanceState(state);
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    _initPlatformState();
   }
 
   @override
   void setState(fn) {
     super.setState(fn);
-    InstanceStateStore.save(key, saveInstanceState());
+    InstanceStateWidget.of(context).save(this, saveInstanceState());
   }
+
+  @override
+  Widget build(BuildContext context) {}
 
   dynamic saveInstanceState();
 

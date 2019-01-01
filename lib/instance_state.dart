@@ -22,13 +22,14 @@ class StateMessage {
 }
 
 const Utf8Codec utf8 = const Utf8Codec();
-const StandardMessageCodec standardMessageCodec = StandardMessageCodec();
 
-class StateMessageCodec implements MessageCodec<StateMessage> {
-  const StateMessageCodec();
+class StateMessageCodec implements MessageCodec<dynamic> {
+  const StateMessageCodec([this.messageCodec = const StandardMessageCodec()]);
+
+  final StandardMessageCodec messageCodec;
 
   @override
-  ByteData encodeMessage(StateMessage message) {
+  ByteData encodeMessage(dynamic message) {
     if (message == null) {
       return null;
     }
@@ -38,47 +39,43 @@ class StateMessageCodec implements MessageCodec<StateMessage> {
     List<int> chars = utf8.encoder.convert(message.key);
     buffer.putUint8List(chars);
     if (message.data != null) {
-      var data = standardMessageCodec.encodeMessage(message.data);
-      buffer.putUint8List(data.buffer.asUint8List());
+      messageCodec.writeValue(buffer, message.data);
     }
     return buffer.done();
   }
 
   @override
-  StateMessage decodeMessage(ByteData bytes) {
+  dynamic decodeMessage(ByteData bytes) {
     if (bytes == null) {
       return null;
     }
-    var buffer = ReadBuffer(bytes);
-    int type = buffer.getUint8();
-    int keyLength = buffer.getUint8();
-    String key = utf8.decoder.convert(buffer.getUint8List(keyLength));
-    dynamic data;
-    if (buffer.hasRemaining) {
-      int remaining = bytes.lengthInBytes - keyLength - 2;
-      data = standardMessageCodec
-          .decodeMessage(buffer.getUint8List(remaining).buffer.asByteData());
-    }
-    return StateMessage(type, key, data);
+    return messageCodec.readValue(ReadBuffer(bytes));
   }
 }
 
 class InstanceStateStore {
-  static const BasicMessageChannel _channel =
-      const BasicMessageChannel('instance_state', StateMessageCodec());
+  factory InstanceStateStore.withCodec(StandardMessageCodec messageCodec) {
+    return InstanceStateStore(
+        BasicMessageChannel('internal_state', StateMessageCodec(messageCodec)));
+  }
 
-  static Future<void> save(String key, dynamic value) {
+  const InstanceStateStore(
+      [this._channel = const BasicMessageChannel(
+          'instance_state', const StateMessageCodec())]);
+
+  final BasicMessageChannel _channel;
+
+  Future<void> save(String key, dynamic value) {
     if (key == null) {
       throw ArgumentError.notNull("key");
     }
     return _channel.send(StateMessage.set(key, value));
   }
 
-  static Future<dynamic> restore(String key) async {
+  Future<dynamic> restore(String key) {
     if (key == null) {
       throw ArgumentError.notNull("key");
     }
-    var message = await _channel.send(StateMessage.get(key));
-    return message.data;
+    return _channel.send(StateMessage.get(key));
   }
 }
