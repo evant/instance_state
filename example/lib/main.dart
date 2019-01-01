@@ -5,36 +5,58 @@ import 'package:instance_state/instance_state.dart';
 
 void main() => runApp(InstanceStateWidget(child: MyApp()));
 
-class MyApp extends StatefulWidget {
-  @override
-  _MyAppState createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> with HasInstanceState {
-  var _counter = 0;
+class MyApp extends StatelessWidget {
+  final navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Plugin example app'),
-        ),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text('Count: $_counter\n'),
-              MaterialButton(
-                child: Text("Increment"),
-                onPressed: () {
-                  setState(() {
-                    _counter++;
-                  });
-                },
-              )
-            ],
-          ),
+      navigatorKey: navigatorKey,
+      onGenerateRoute: (settings) => null,
+      builder: (context, widget) => InstanceStateNavigator.routes(
+              navigatorKey: navigatorKey,
+              routes: {
+                "/": (context) => CounterWidget(),
+                "/hello": (context) => HelloWidget()
+              }),
+    );
+  }
+}
+
+class CounterWidget extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() => CounterState();
+}
+
+class CounterState extends State<CounterWidget> with HasInstanceState {
+  var _counter = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Counter'),
+      ),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text('Count: $_counter\n'),
+            MaterialButton(
+              child: Text("Increment"),
+              onPressed: () {
+                setState(() {
+                  _counter++;
+                });
+              },
+            ),
+            MaterialButton(
+              child: Text("Hello"),
+              onPressed: () {
+                InstanceStateNavigator.pushNamed(context, "/hello");
+              },
+            )
+          ],
         ),
       ),
     );
@@ -44,13 +66,22 @@ class _MyAppState extends State<MyApp> with HasInstanceState {
   String get instanceStateKey => "counter";
 
   @override
-  saveInstanceState() {
-    return _counter;
+  void restoreInstanceState(state) {
+    _counter = state;
   }
 
   @override
-  void restoreInstanceState(state) {
-    _counter = state;
+  saveInstanceState() {
+    return _counter;
+  }
+}
+
+class HelloWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text("Hello"),
+    );
   }
 }
 
@@ -115,10 +146,97 @@ mixin HasInstanceState<T extends StatefulWidget> on State<T> {
     InstanceStateWidget.of(context).save(this, saveInstanceState());
   }
 
-  @override
-  Widget build(BuildContext context) {}
-
   dynamic saveInstanceState();
 
   void restoreInstanceState(dynamic state);
+}
+
+class InstanceStateNavigator extends StatefulWidget {
+  final GlobalKey<NavigatorState> navigatorKey;
+  final RouteFactory onGenerateRoute;
+
+  InstanceStateNavigator(
+      {Key key, this.navigatorKey, @required this.onGenerateRoute})
+      : super(key: key);
+
+  factory InstanceStateNavigator.routes(
+      {GlobalKey<NavigatorState> navigatorKey,
+      @required Map<String, WidgetBuilder> routes,
+      PageRouteFactory pageRouteBuilder}) {
+    return InstanceStateNavigator(
+        navigatorKey: navigatorKey,
+        onGenerateRoute: (settings) {
+          final name = settings.name;
+          final routes = {
+            "/": (context) => CounterWidget(),
+            "/hello": (context) => HelloWidget()
+          };
+          final pageContentBuilder = routes[name];
+          final Route<dynamic> route = pageRouteBuilder != null
+              ? pageRouteBuilder(settings, pageContentBuilder)
+              : MaterialPageRoute(
+                  builder: pageContentBuilder, settings: settings);
+          return route;
+        });
+  }
+
+  static InstanceStateNavigatorState of(BuildContext context) {
+    return context
+        .ancestorStateOfType(TypeMatcher<InstanceStateNavigatorState>());
+  }
+
+  static void pushNamed(BuildContext context, String routeName) {
+    of(context).pushNamed(routeName);
+  }
+
+  static bool pop(BuildContext context) {
+    return of(context).pop();
+  }
+
+  @override
+  State<StatefulWidget> createState() => InstanceStateNavigatorState();
+}
+
+class InstanceStateNavigatorState extends State<InstanceStateNavigator>
+    with HasInstanceState {
+  List<dynamic> stack = [];
+
+  @override
+  Widget build(BuildContext context) {
+    return Navigator(
+        key: widget.navigatorKey, onGenerateRoute: widget.onGenerateRoute);
+  }
+
+  @override
+  String get instanceStateKey => "navigator";
+
+  @override
+  void restoreInstanceState(state) {
+    stack = state;
+    for (var routeName in stack) {
+      widget.navigatorKey.currentState.pushNamed(routeName);
+    }
+  }
+
+  @override
+  saveInstanceState() {
+    return stack;
+  }
+
+  void pushNamed(String routeName) {
+    widget.navigatorKey.currentState.pushNamed(routeName);
+    setState(() {
+      stack.add(routeName);
+    });
+  }
+
+  bool pop() {
+    bool result = widget.navigatorKey.currentState.pop();
+    if (result) {
+      setState(() {
+        stack.removeLast();
+      });
+    }
+    return result;
+  }
 }
