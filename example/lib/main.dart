@@ -1,35 +1,43 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:instance_state/instance_state.dart';
 
-void main() => runApp(InstanceStateWidget(child: MyApp()));
+void main() =>
+    runApp(InstanceStateStorage(bucket: InstanceStateBucket(), child: MyApp()));
 
 class MyApp extends StatelessWidget {
   final navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   Widget build(BuildContext context) {
+    final observer = NavigatorInstanceState.createObserver();
     return MaterialApp(
       navigatorKey: navigatorKey,
-      onGenerateRoute: (settings) => null,
-      builder: (context, widget) => InstanceStateNavigator.routes(
-              navigatorKey: navigatorKey,
-              routes: {
-                "/": (context) => CounterWidget(),
-                "/hello": (context) => HelloWidget()
-              }),
+      routes: {
+        '/': (context) => CounterWidget(InstanceStateKey('counter')),
+        '/nav': (context) => NavWidget(InstanceStateKey('navigated')),
+        '/scrolled': (context) => ScrolledWidget(InstanceStateKey('scroll')),
+      },
+      navigatorObservers: [observer],
+      builder: (context, widget) =>
+          NavigatorInstanceState(
+            key: InstanceStateKey('navigator'),
+            navigatorKey: navigatorKey,
+            observer: observer,
+            child: widget,
+          ),
     );
   }
 }
 
 class CounterWidget extends StatefulWidget {
+  CounterWidget(InstanceStateKey key) : super(key: key);
+
   @override
   State<StatefulWidget> createState() => CounterState();
 }
 
 class CounterState extends State<CounterWidget> with HasInstanceState {
-  var _counter = 0;
+  var counter = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -41,21 +49,26 @@ class CounterState extends State<CounterWidget> with HasInstanceState {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text('Count: $_counter\n'),
+            Text('Count: $counter\n'),
             MaterialButton(
               child: Text("Increment"),
               onPressed: () {
                 setState(() {
-                  _counter++;
+                  counter++;
                 });
               },
             ),
             MaterialButton(
-              child: Text("Hello"),
+              child: Text("Nav"),
               onPressed: () {
-                InstanceStateNavigator.pushNamed(context, "/hello");
+                Navigator.pushNamed(context, '/nav');
               },
-            )
+            ),
+            MaterialButton(
+                child: Text("Scrolled"),
+                onPressed: () {
+                  Navigator.pushNamed(context, '/scrolled');
+                })
           ],
         ),
       ),
@@ -63,180 +76,140 @@ class CounterState extends State<CounterWidget> with HasInstanceState {
   }
 
   @override
-  String get instanceStateKey => "counter";
-
-  @override
   void restoreInstanceState(state) {
-    _counter = state;
+    counter = state;
   }
 
   @override
   saveInstanceState() {
-    return _counter;
+    return counter;
   }
 }
 
-class HelloWidget extends StatelessWidget {
+class NavWidget extends StatefulWidget {
+  NavWidget(InstanceStateKey key) : super(key: key);
+
+  @override
+  NavWidgetState createState() {
+    return new NavWidgetState();
+  }
+}
+
+class NavWidgetState extends State<NavWidget> with HasInstanceState {
+  bool checked = false;
+
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text("Hello"),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Navigated'),
+      ),
+      body: Center(
+          child: CheckboxListTile(
+            value: checked,
+            onChanged: (checked) {
+              setState(() {
+                this.checked = checked;
+              });
+            },
+            title: Text('Navigated'),
+            controlAffinity: ListTileControlAffinity.leading,
+          )),
+    );
+  }
+
+  @override
+  void restoreInstanceState(state) {
+    checked = state;
+  }
+
+  @override
+  saveInstanceState() {
+    return checked;
+  }
+}
+
+class ScrolledWidget extends StatefulWidget {
+
+  ScrolledWidget(InstanceStateKey key): super(key: key);
+
+  @override
+  ScrolledWidgetState createState() => new ScrolledWidgetState();
+}
+
+class ScrolledWidgetState extends State<ScrolledWidget> {
+  ScrollController _controller;
+
+  @override
+  void initState() {
+    _controller = InstanceStateScrollController();
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Scrolled'),
+      ),
+      body: ListView.builder(
+        itemBuilder: (context, index) =>
+            ListTile(
+              title: Text("Item: $index"),
+            ),
+        itemCount: 30,
+        controller: _controller,
+      ),
     );
   }
 }
 
-class InstanceStateWidget extends InheritedWidget {
-  InstanceStateWidget(
-      {Key key,
-      @required Widget child,
-      this.instanceStateStore = const InstanceStateStore()})
-      : super(key: key, child: child);
-
-  final InstanceStateStore instanceStateStore;
-
-  static InstanceStateWidget of(BuildContext context) {
-    return context.inheritFromWidgetOfExactType(InstanceStateWidget);
-  }
-
-  Future<dynamic> restore(HasInstanceState mixin) {
-    return instanceStateStore.restore(_key(mixin));
-  }
-
-  void save(HasInstanceState mixin, dynamic value) {
-    instanceStateStore.save(_key(mixin), value);
-  }
-
-  String _key(HasInstanceState mixin) {
-    HasInstanceState parent =
-        mixin.context.ancestorStateOfType(TypeMatcher<HasInstanceState>());
-    if (parent != null) {
-      return _key(parent) + "." + mixin.instanceStateKey;
-    } else {
-      return mixin.instanceStateKey;
-    }
-  }
-
+class InstanceStateScrollController extends ScrollController {
   @override
-  bool updateShouldNotify(InstanceStateWidget oldWidget) {
-    return this.instanceStateStore != oldWidget.instanceStateStore;
+  ScrollPosition createScrollPosition(ScrollPhysics physics,
+      ScrollContext context, ScrollPosition oldPosition) {
+    return InstanceStateScrollPosition(
+      physics: physics,
+      context: context,
+      initialPixels: initialScrollOffset,
+      keepScrollOffset: keepScrollOffset,
+      oldPosition: oldPosition,
+      debugLabel: debugLabel,
+    );
   }
 }
 
-mixin HasInstanceState<T extends StatefulWidget> on State<T> {
-  String get instanceStateKey;
+class InstanceStateScrollPosition extends ScrollPositionWithSingleContext {
+  InstanceStateScrollPosition({ScrollPhysics physics,
+    ScrollContext context,
+    ScrollPosition oldPosition,
+    double initialPixels,
+    bool keepScrollOffset,
+    String debugLabel})
+      : super(
+      physics: physics,
+      context: context,
+      oldPosition: oldPosition,
+      initialPixels: initialPixels,
+      keepScrollOffset: keepScrollOffset,
+      debugLabel: debugLabel);
 
-  Future<void> _initPlatformState() async {
-    var state = await InstanceStateWidget.of(context).restore(this);
-    if (!mounted) return;
-    if (state != null) {
-      setState(() {
-        restoreInstanceState(state);
-      });
+  @override
+  void saveScrollOffset() {
+    super.saveScrollOffset();
+    InstanceStateStorage.of(context.storageContext)
+        ?.save(context.storageContext, pixels);
+  }
+
+  @override
+  void restoreScrollOffset() async {
+    super.restoreScrollOffset();
+    if (pixels == null) {
+      double value = await InstanceStateStorage.of(context.storageContext)
+          ?.restore(context.storageContext);
+      if (value != null) {
+        correctPixels(value);
+      }
     }
-  }
-
-  @override
-  void didChangeDependencies() {
-    _initPlatformState();
-  }
-
-  @override
-  void setState(fn) {
-    super.setState(fn);
-    InstanceStateWidget.of(context).save(this, saveInstanceState());
-  }
-
-  dynamic saveInstanceState();
-
-  void restoreInstanceState(dynamic state);
-}
-
-class InstanceStateNavigator extends StatefulWidget {
-  final GlobalKey<NavigatorState> navigatorKey;
-  final RouteFactory onGenerateRoute;
-
-  InstanceStateNavigator(
-      {Key key, this.navigatorKey, @required this.onGenerateRoute})
-      : super(key: key);
-
-  factory InstanceStateNavigator.routes(
-      {GlobalKey<NavigatorState> navigatorKey,
-      @required Map<String, WidgetBuilder> routes,
-      PageRouteFactory pageRouteBuilder}) {
-    return InstanceStateNavigator(
-        navigatorKey: navigatorKey,
-        onGenerateRoute: (settings) {
-          final name = settings.name;
-          final routes = {
-            "/": (context) => CounterWidget(),
-            "/hello": (context) => HelloWidget()
-          };
-          final pageContentBuilder = routes[name];
-          final Route<dynamic> route = pageRouteBuilder != null
-              ? pageRouteBuilder(settings, pageContentBuilder)
-              : MaterialPageRoute(
-                  builder: pageContentBuilder, settings: settings);
-          return route;
-        });
-  }
-
-  static InstanceStateNavigatorState of(BuildContext context) {
-    return context
-        .ancestorStateOfType(TypeMatcher<InstanceStateNavigatorState>());
-  }
-
-  static void pushNamed(BuildContext context, String routeName) {
-    of(context).pushNamed(routeName);
-  }
-
-  static bool pop(BuildContext context) {
-    return of(context).pop();
-  }
-
-  @override
-  State<StatefulWidget> createState() => InstanceStateNavigatorState();
-}
-
-class InstanceStateNavigatorState extends State<InstanceStateNavigator>
-    with HasInstanceState {
-  List<dynamic> stack = [];
-
-  @override
-  Widget build(BuildContext context) {
-    return Navigator(
-        key: widget.navigatorKey, onGenerateRoute: widget.onGenerateRoute);
-  }
-
-  @override
-  String get instanceStateKey => "navigator";
-
-  @override
-  void restoreInstanceState(state) {
-    stack = state;
-    for (var routeName in stack) {
-      widget.navigatorKey.currentState.pushNamed(routeName);
-    }
-  }
-
-  @override
-  saveInstanceState() {
-    return stack;
-  }
-
-  void pushNamed(String routeName) {
-    widget.navigatorKey.currentState.pushNamed(routeName);
-    setState(() {
-      stack.add(routeName);
-    });
-  }
-
-  bool pop() {
-    bool result = widget.navigatorKey.currentState.pop();
-    if (result) {
-      setState(() {
-        stack.removeLast();
-      });
-    }
-    return result;
   }
 }

@@ -32,18 +32,28 @@ public class InstanceStateFragment extends Fragment implements BasicMessageChann
 
     @Override
     public void onMessage(StateMessage message, BasicMessageChannel.Reply<StateMessage> reply) {
-        if (message.type == StateMessage.TYPE_GET) {
-            if (restoreState != null) {
-                byte[] data = restoreState.getByteArray(message.key);
-                restoreState.remove(message.key);
-                message.data = data;
-            }
-            reply.reply(message);
-        } else {
-            if (saveState == null) {
-                saveState = new Bundle();
-            }
-            saveState.putByteArray(message.key, message.data);
+        switch (message.type) {
+            case StateMessage.TYPE_GET:
+                if (restoreState != null) {
+                    byte[] data = restoreState.getByteArray(message.key);
+                    restoreState.remove(message.key);
+                    message.data = data;
+                }
+                reply.reply(message);
+                break;
+            case StateMessage.TYPE_SET:
+                if (saveState == null) {
+                    saveState = new Bundle();
+                }
+                saveState.putByteArray(message.key, message.data);
+                reply.reply(null);
+                break;
+            case StateMessage.TYPE_REMOVE:
+                if (saveState != null) {
+                    saveState.remove(message.key);
+                }
+                reply.reply(null);
+                break;
         }
     }
 }

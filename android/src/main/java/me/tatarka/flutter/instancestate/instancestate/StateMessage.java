@@ -4,6 +4,7 @@ public final class StateMessage {
 
     public static final byte TYPE_GET = 0;
     public static final byte TYPE_SET = 1;
+    public static final byte TYPE_REMOVE = 2;
 
     public final byte type;
     public final String key;
