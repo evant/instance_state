@@ -38,7 +38,7 @@ class StateMessageCodec implements MessageCodec<dynamic> {
     if (message == null) {
       return null;
     }
-    var buffer = WriteBuffer();
+    final buffer = WriteBuffer();
     buffer.putUint8(message.type);
     buffer.putUint8(message.key.length);
     List<int> chars = utf8.encoder.convert(message.key);
@@ -54,7 +54,13 @@ class StateMessageCodec implements MessageCodec<dynamic> {
     if (bytes == null) {
       return null;
     }
-    return messageCodec.readValue(ReadBuffer(bytes));
+    final buffer = ReadBuffer(bytes);
+    // type
+    buffer.getUint8();
+    // key
+    final keyLength = buffer.getUint8();
+    buffer.getUint8List(keyLength);
+    return messageCodec.readValue(buffer);
   }
 }
 
@@ -111,7 +117,7 @@ class InstanceStateBucket {
 
   void save(BuildContext context, dynamic value) {
     final identifier =
-    _identifiers.putIfAbsent(context, () => _computeIdentifier(context));
+        _identifiers.putIfAbsent(context, () => _computeIdentifier(context));
     store.save(identifier, value);
   }
 
@@ -277,5 +283,55 @@ class NavigatorInstanceStateObserver extends NavigatorObserver {
     _state.setState(() {
       _state.stack.removeLast();
     });
+  }
+}
+
+class InstanceStateScrollController extends ScrollController {
+  @override
+  ScrollPosition createScrollPosition(ScrollPhysics physics,
+      ScrollContext context, ScrollPosition oldPosition) {
+    return InstanceStateScrollPosition(
+      physics: physics,
+      context: context,
+      initialPixels: initialScrollOffset,
+      keepScrollOffset: keepScrollOffset,
+      oldPosition: oldPosition,
+      debugLabel: debugLabel,
+    );
+  }
+}
+
+class InstanceStateScrollPosition extends ScrollPositionWithSingleContext {
+  InstanceStateScrollPosition({ScrollPhysics physics,
+    ScrollContext context,
+    ScrollPosition oldPosition,
+    double initialPixels,
+    bool keepScrollOffset,
+    String debugLabel})
+      : super(
+      physics: physics,
+      context: context,
+      oldPosition: oldPosition,
+      initialPixels: initialPixels,
+      keepScrollOffset: keepScrollOffset,
+      debugLabel: debugLabel);
+
+  @override
+  void saveScrollOffset() {
+    super.saveScrollOffset();
+    InstanceStateStorage.of(context.storageContext)
+        ?.save(context.storageContext, pixels);
+  }
+
+  @override
+  void restoreScrollOffset() async {
+    super.restoreScrollOffset();
+    if (pixels == null) {
+      double value = await InstanceStateStorage.of(context.storageContext)
+          ?.restore(context.storageContext);
+      if (value != null) {
+        forcePixels(value);
+      }
+    }
   }
 }

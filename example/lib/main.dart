@@ -138,11 +138,11 @@ class ScrolledWidget extends StatefulWidget {
 }
 
 class ScrolledWidgetState extends State<ScrolledWidget> {
-  ScrollController _controller;
+  ScrollController controller;
 
   @override
   void initState() {
-    _controller = InstanceStateScrollController();
+    controller = InstanceStateScrollController();
     super.initState();
   }
 
@@ -158,58 +158,9 @@ class ScrolledWidgetState extends State<ScrolledWidget> {
               title: Text("Item: $index"),
             ),
         itemCount: 30,
-        controller: _controller,
+        controller: controller,
       ),
     );
   }
 }
 
-class InstanceStateScrollController extends ScrollController {
-  @override
-  ScrollPosition createScrollPosition(ScrollPhysics physics,
-      ScrollContext context, ScrollPosition oldPosition) {
-    return InstanceStateScrollPosition(
-      physics: physics,
-      context: context,
-      initialPixels: initialScrollOffset,
-      keepScrollOffset: keepScrollOffset,
-      oldPosition: oldPosition,
-      debugLabel: debugLabel,
-    );
-  }
-}
-
-class InstanceStateScrollPosition extends ScrollPositionWithSingleContext {
-  InstanceStateScrollPosition({ScrollPhysics physics,
-    ScrollContext context,
-    ScrollPosition oldPosition,
-    double initialPixels,
-    bool keepScrollOffset,
-    String debugLabel})
-      : super(
-      physics: physics,
-      context: context,
-      oldPosition: oldPosition,
-      initialPixels: initialPixels,
-      keepScrollOffset: keepScrollOffset,
-      debugLabel: debugLabel);
-
-  @override
-  void saveScrollOffset() {
-    super.saveScrollOffset();
-    InstanceStateStorage.of(context.storageContext)
-        ?.save(context.storageContext, pixels);
-  }
-
-  @override
-  void restoreScrollOffset() async {
-    super.restoreScrollOffset();
-    if (pixels == null) {
-      double value = await InstanceStateStorage.of(context.storageContext)
-          ?.restore(context.storageContext);
-      if (value != null) {
-        correctPixels(value);
-      }
-    }
-  }
-}

@@ -5,14 +5,17 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:instance_state/instance_state.dart';
-
 import 'package:instance_state_example/main.dart';
 
 void main() {
-  testWidgets('Saves counter', (WidgetTester tester) async {
+  testWidgets('Saves counter', (tester) async {
     final store = TestInstanceStateStore();
 
     await tester.pumpWidget(testStorage(
@@ -34,6 +37,62 @@ void main() {
 
     expect(
         (tester.state(find.byType(CounterWidget)) as CounterState).counter, 1);
+  });
+
+  testWidgets('Saves navigation', (tester) async {
+    final store = TestInstanceStateStore();
+
+    await tester.pumpWidget(testStorage(store: store, child: MyApp()));
+
+    await tester.tap(find.widgetWithText(MaterialButton, 'Nav'));
+
+    expect(store.store, {
+      '.navigator': ['/nav']
+    });
+  });
+
+  testWidgets('Restores navigation', (tester) async {
+    final store = TestInstanceStateStore();
+    store.store['.navigator'] = ['/nav'];
+
+    await tester.pumpWidget(testStorage(store: store, child: MyApp()));
+
+    expect(tester.widget(find.byType(NavWidget)), isNotNull);
+  }, skip: true);
+
+  testWidgets('Saves scroll position', (tester) async {
+    final store = TestInstanceStateStore();
+
+    await tester.pumpWidget(testStorage(
+        store: store,
+        child: MaterialApp(home: ScrolledWidget(InstanceStateKey('scroll')))));
+
+    await tester.drag(find.byType(ListView), Offset(0, -10));
+
+    expect(store.store, {'.scroll': 10.0});
+  });
+
+  testWidgets('Restores scroll position', (tester) async {
+    final store = TestInstanceStateStore();
+    store.store['.scroll'] = 10.0;
+
+    await tester.pumpWidget(testStorage(
+        store: store,
+        child: MaterialApp(home: ScrolledWidget(InstanceStateKey('scroll')))));
+
+    expect((tester.state(find.byType(ScrolledWidget)) as ScrolledWidgetState).controller.offset, 10.0);
+  });
+
+  test("standard codec round-trips float64", () {
+    final codec = StandardMessageCodec();
+    final write = WriteBuffer();
+    codec.writeValue(write, 553.9091095205873);
+    final bytes = write.done();
+    print("encoded: ${bytes.buffer.asUint8List(0, bytes.lengthInBytes)}");
+//    final read = ReadBuffer(ByteData.view(Uint8List.fromList([6, 0, 0, 0, 0, 61, 91, 54, 219, 69, 79, 129, 64]).buffer));
+    final read = ReadBuffer(bytes);
+    final value = codec.readValue(read);
+    expect(value, 553.9091095205873);
   });
 }
 
