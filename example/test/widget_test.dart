@@ -82,18 +82,6 @@ void main() {
 
     expect((tester.state(find.byType(ScrolledWidget)) as ScrolledWidgetState).controller.offset, 10.0);
   });
-
-  test("standard codec round-trips float64", () {
-    final codec = StandardMessageCodec();
-    final write = WriteBuffer();
-    codec.writeValue(write, 553.9091095205873);
-    final bytes = write.done();
-    print("encoded: ${bytes.buffer.asUint8List(0, bytes.lengthInBytes)}");
-//    final read = ReadBuffer(ByteData.view(Uint8List.fromList([6, 0, 0, 0, 0, 61, 91, 54, 219, 69, 79, 129, 64]).buffer));
-    final read = ReadBuffer(bytes);
-    final value = codec.readValue(read);
-    expect(value, 553.9091095205873);
-  });
 }
 
 InstanceStateStorage testStorage({TestInstanceStateStore store, Widget child}) {

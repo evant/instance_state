@@ -5,6 +5,22 @@ import java.nio.charset.Charset;
 
 import io.flutter.plugin.common.MessageCodec;
 
+/**
+ * Encodes/decodes a {@link StateMessage}. Note: this is asymmetric as we only need extra
+ * information on the request side. {@link #decodeMessage(ByteBuffer)} will decode to a
+ * {@code StateMessage}, the expected byte format is:
+ * <pre>
+ * type (1 byte)
+ * key length (1 byte)
+ * key (key length bytes, utf8-encoded)
+ * padding to align to 8 bytes
+ * data (remaining bytes)
+ * </pre>
+ * Alignment padding is included before the data so that everything else can be stripped without
+ * changing how the data is encoded.
+ * <p>
+ * {@link #encodeMessage(StateMessage)} will encode just the data.
+ */
 public class StateMessageCodec implements MessageCodec<StateMessage> {
 
     public static final StateMessageCodec INSTANCE = new StateMessageCodec();
@@ -15,11 +31,7 @@ public class StateMessageCodec implements MessageCodec<StateMessage> {
         if (message == null || message.data == null) {
             return null;
         }
-        ByteBuffer buffer = ByteBuffer.allocateDirect(length(message));
-        buffer.put(message.type);
-        buffer.put((byte) message.key.length());
-        byte[] chars = message.key.getBytes(charset);
-        buffer.put(chars);
+        ByteBuffer buffer = ByteBuffer.allocateDirect(message.data.length);
         buffer.put(message.data);
         return buffer;
     }
@@ -36,17 +48,19 @@ public class StateMessageCodec implements MessageCodec<StateMessage> {
         String key = new String(chars, charset);
         byte[] data = null;
         if (buffer.hasRemaining()) {
+            // data is aligned to 8 bytes so that the type and key can be removed without
+            // changing it's result. This way they don't have to be sent in the response.
+            readAlignment8(buffer);
             data = new byte[buffer.remaining()];
             buffer.get(data);
         }
         return new StateMessage(type, key, data);
     }
 
-    private static final int length(StateMessage message) {
-        int length = message.key.length() + 2;
-        if (message.data != null) {
-            length += message.data.length;
+    private static void readAlignment8(ByteBuffer buffer) {
+        int mod = buffer.position() % 8;
+        if (mod != 0) {
+            buffer.position(buffer.position() + 8 - mod);
         }
-        return length;
     }
 }

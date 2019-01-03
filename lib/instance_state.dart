@@ -28,6 +28,20 @@ class StateMessage {
 
 const Utf8Codec utf8 = const Utf8Codec();
 
+/// Encodes/decodes a [StateMessage]. Note: this is asymmetric as we only need
+/// extra information on the request side. [encodeMessage] will encode to a
+/// [StateMessage], the expected byte format is:
+/// <pre>
+/// type (1 byte)
+/// key length (1 byte)
+/// key (key length bytes, utf8-encoded)
+/// padding to align to 8 bytes
+/// data (remaining bytes, encoded using [StandardMessageCodec])
+/// </pre>
+/// Alignment padding is included before the data so that everything else can be
+/// stripped without changing how the data is encoded.
+///
+/// [decodeMessage] will just decode the data using [StandardMessageCodec].
 class StateMessageCodec implements MessageCodec<dynamic> {
   const StateMessageCodec([this.messageCodec = const StandardMessageCodec()]);
 
@@ -44,6 +58,7 @@ class StateMessageCodec implements MessageCodec<dynamic> {
     List<int> chars = utf8.encoder.convert(message.key);
     buffer.putUint8List(chars);
     if (message.data != null) {
+      _writeAlignment8(buffer);
       messageCodec.writeValue(buffer, message.data);
     }
     return buffer.done();
@@ -54,13 +69,15 @@ class StateMessageCodec implements MessageCodec<dynamic> {
     if (bytes == null) {
       return null;
     }
-    final buffer = ReadBuffer(bytes);
-    // type
-    buffer.getUint8();
-    // key
-    final keyLength = buffer.getUint8();
-    buffer.getUint8List(keyLength);
-    return messageCodec.readValue(buffer);
+    return messageCodec.readValue(ReadBuffer(bytes));
+  }
+
+  void _writeAlignment8(WriteBuffer buffer) {
+    // We need to force an alignment but we don't know how much data has been
+    // written in the buffer already. Luckily, putFloat64List() can do this for
+    // us, as it uses _alignTo(8) under the hood. By passing an empty list we
+    // can trigger this without adding any additional data.
+    buffer.putFloat64List(Float64List(0));
   }
 }
 
@@ -302,19 +319,20 @@ class InstanceStateScrollController extends ScrollController {
 }
 
 class InstanceStateScrollPosition extends ScrollPositionWithSingleContext {
-  InstanceStateScrollPosition({ScrollPhysics physics,
-    ScrollContext context,
-    ScrollPosition oldPosition,
-    double initialPixels,
-    bool keepScrollOffset,
-    String debugLabel})
+  InstanceStateScrollPosition(
+      {ScrollPhysics physics,
+      ScrollContext context,
+      ScrollPosition oldPosition,
+      double initialPixels,
+      bool keepScrollOffset,
+      String debugLabel})
       : super(
-      physics: physics,
-      context: context,
-      oldPosition: oldPosition,
-      initialPixels: initialPixels,
-      keepScrollOffset: keepScrollOffset,
-      debugLabel: debugLabel);
+            physics: physics,
+            context: context,
+            oldPosition: oldPosition,
+            initialPixels: initialPixels,
+            keepScrollOffset: keepScrollOffset,
+            debugLabel: debugLabel);
 
   @override
   void saveScrollOffset() {
